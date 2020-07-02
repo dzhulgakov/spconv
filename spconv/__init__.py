@@ -17,16 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
-
-from spconv import ops, utils
-from spconv.conv import (SparseConv2d, SparseConv3d, SparseConvTranspose2d,
-                         SparseConvTranspose3d, SparseInverseConv2d,
-                         SparseInverseConv3d, SubMConv2d, SubMConv3d)
-from spconv.identity import Identity
-from spconv.modules import SparseModule, SparseSequential
-from spconv.ops import ConvAlgo
-from spconv.pool import SparseMaxPool2d, SparseMaxPool3d
-from spconv.tables import AddTable, ConcatTable, JoinTable
+from typing import List, Optional
 
 _LIB_FILE_NAME = "libspconv.so"
 if platform.system() == "Windows":
@@ -35,25 +26,30 @@ _LIB_PATH = str(Path(__file__).parent / _LIB_FILE_NAME)
 torch.ops.load_library(_LIB_PATH)
 
 
-def scatter_nd(indices, updates, shape):
+def scatter_nd(indices, updates, shape : List[int]):
     """pytorch edition of tensorflow scatter_nd.
     this function don't contain except handle code. so use this carefully
     when indice repeats, don't support repeat add which is supported
     in tensorflow.
     """
-    ret = torch.zeros(*shape, dtype=updates.dtype, device=updates.device)
+    ret = torch.zeros(shape, dtype=updates.dtype, device=updates.device)
     ndim = indices.shape[-1]
     output_shape = list(indices.shape[:-1]) + shape[indices.shape[-1]:]
     flatted_indices = indices.view(-1, ndim)
     slices = [flatted_indices[:, i] for i in range(ndim)]
-    slices += [Ellipsis]
-    ret[slices] = updates.view(*output_shape)
+    # not needed
+    #slices += [Ellipsis]
+    ret[slices] = updates.view(output_shape)
     return ret
 
 
 class SparseConvTensor(object):
-    def __init__(self, features, indices, spatial_shape, batch_size,
-                 grid=None):
+    # don't work?
+    # spatial_shape : List[int]
+    # batch_size : int
+
+    def __init__(self, features, indices, spatial_shape : List[int], batch_size : int,
+            grid : Optional[torch.Tensor] = None):
         """
         Args:
             features: [num_points, num_features] feature tensor
@@ -80,13 +76,13 @@ class SparseConvTensor(object):
         batch_size = x.shape[0]
         indices_th = x.indices().permute(1, 0).contiguous().int()
         features_th = x.values()
-        return cls(features_th, indices_th, spatial_shape, batch_size)
+        return SparseConvTensor(features_th, indices_th, spatial_shape, batch_size, None)
 
     @property
     def spatial_size(self):
         return np.prod(self.spatial_shape)
 
-    def find_indice_pair(self, key):
+    def find_indice_pair(self, key : str):
         if key is None:
             return None
         if key in self.indice_dict:
@@ -102,15 +98,25 @@ class SparseConvTensor(object):
         if not channels_first:
             return res
         ndim = len(self.spatial_shape)
-        trans_params = list(range(0, ndim + 1))
+        trans_params : List[int] = torch.arange(0, ndim + 1).tolist()
         trans_params.insert(1, ndim + 1)
-        return res.permute(*trans_params).contiguous()
+        return res.permute(trans_params).contiguous()
 
     @property
     def sparity(self):
         return self.indices.shape[0] / np.prod(
             self.spatial_shape) / self.batch_size
 
+
+from spconv import ops, utils
+from spconv.conv import (SparseConv2d, SparseConv3d, SparseConvTranspose2d,
+                         SparseConvTranspose3d, SparseInverseConv2d,
+                         SparseInverseConv3d, SubMConv2d, SubMConv3d)
+from spconv.identity import Identity
+from spconv.modules import SparseModule, SparseSequential
+from spconv.ops import ConvAlgo
+from spconv.pool import SparseMaxPool2d, SparseMaxPool3d
+from spconv.tables import AddTable, ConcatTable, JoinTable
 
 class ToDense(SparseModule):
     """convert SparseConvTensor to NCHW dense tensor.
@@ -125,3 +131,4 @@ class RemoveGrid(SparseModule):
     def forward(self, x: SparseConvTensor):
         x.grid = None
         return x
+

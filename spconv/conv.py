@@ -52,7 +52,7 @@ def _calculate_fan_in_and_fan_out_hwio(tensor):
 class SparseConvolution(SparseModule):
     __constants__ = [
         'stride', 'padding', 'dilation', 'groups', 'bias', 'subm', 'inverse',
-        'transposed', 'output_padding', 'fused_bn'
+        'transposed', 'output_padding', 'fused_bn', 'conv1x1'
     ]
 
     def __init__(self,
@@ -93,7 +93,7 @@ class SparseConvolution(SparseModule):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
-        self.conv1x1 = np.prod(kernel_size) == 1
+        self.conv1x1 = bool(np.prod(kernel_size) == 1)
         self.stride = stride
         self.padding = padding
         self.dilation = dilation
@@ -123,7 +123,7 @@ class SparseConvolution(SparseModule):
             bound = 1 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
 
-    def forward(self, input):
+    def forward(self, input : spconv.SparseConvTensor):
         assert isinstance(input, spconv.SparseConvTensor)
         features = input.features
         device = features.device
@@ -151,7 +151,7 @@ class SparseConvolution(SparseModule):
                 features += self.bias
             out_tensor = spconv.SparseConvTensor(features, input.indices,
                                                  input.spatial_shape,
-                                                 input.batch_size)
+                                                 input.batch_size, None)
             out_tensor.indice_dict = input.indice_dict
             out_tensor.grid = input.grid
             return out_tensor

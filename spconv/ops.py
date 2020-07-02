@@ -18,6 +18,8 @@ import torch
 
 import spconv
 
+from typing import List
+
 
 class ConvAlgo(Enum):
     Native = 0  # small memory cost, faster when number of points is large.
@@ -25,9 +27,9 @@ class ConvAlgo(Enum):
     BatchGemmGather = 2  # high memory cost, faster when number of points medium
 
 
-def get_conv_output_size(input_size, kernel_size, stride, padding, dilation):
+def get_conv_output_size(input_size : List[int], kernel_size : List[int], stride : List[int], padding : List[int], dilation : List[int]):
     ndim = len(input_size)
-    output_size = []
+    output_size : List[int] = []
     for i in range(ndim):
         size = (input_size[i] + 2 * padding[i] - dilation[i] *
                 (kernel_size[i] - 1) - 1) // stride[i] + 1
@@ -38,10 +40,10 @@ def get_conv_output_size(input_size, kernel_size, stride, padding, dilation):
     return output_size
 
 
-def get_deconv_output_size(input_size, kernel_size, stride, padding, dilation,
-                           output_padding):
+def get_deconv_output_size(input_size : List[int], kernel_size : List[int], stride : List[int], padding : List[int], dilation : List[int],
+        output_padding : List[int]):
     ndim = len(input_size)
-    output_size = []
+    output_size : List[int] = []
     for i in range(ndim):
         if kernel_size[i] == -1:
             raise ValueError("deconv don't support kernel_size < 0")
